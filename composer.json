@@ -1,0 +1,15 @@
+{
+    "name": "dat/schedule-parser",
+    "description": "schedule parser for football.ch",
+    "type": "library",
+    "require": {
+        "parsecsv/php-parsecsv": "^1.2"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Thomas D'Ascoli",
+            "email": "thomas@dasco.li"
+        }
+    ]
+}
