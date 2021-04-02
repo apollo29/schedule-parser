@@ -2,8 +2,18 @@
     "name": "dat/schedule-parser",
     "description": "schedule parser for football.ch",
     "type": "library",
+    "autoload": {
+        "psr-4": {
+            "ScheduleParser\\": "src/ScheduleParser/"
+        }
+    },
     "require": {
-        "parsecsv/php-parsecsv": "^1.2"
+        "parsecsv/php-parsecsv": "^1.2",
+        "ext-mysqli": "*",
+        "ext-json": "*",
+        "ext-pdo": "*",
+        "vlucas/phpdotenv": "^4.1",
+        "psr/log": "^1.1"
     },
     "license": "MIT",
     "authors": [
