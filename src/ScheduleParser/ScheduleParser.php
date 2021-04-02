@@ -61,65 +61,112 @@ class ScheduleParser {
     public function parse(array $schedules) {
         if (is_array($schedules)){
             foreach ($schedules as $key => $schedule){
-                if (!$schedule['isCustom']) {
-                    $file = file_get_contents($schedule['url']);
-                    if (!empty($file)) {
-                        // RESET
-                        $sql = "DELETE FROM " . $schedule['table'];
-                        $this->db->query($sql);
+                $file = file_get_contents($schedule['url']);
+                if (!empty($file)) {
+                    // RESET
+                    $sql = "DELETE FROM " . $schedule['table'];
+                    $this->db->query($sql);
 
-                        $this->csv->encoding('windows-1252', 'UTF-8');
-                        $this->csv->auto($file);
+                    $this->csv->encoding('windows-1252', 'UTF-8');
+                    $this->csv->auto($file);
 
-                        // FILE
-                        $sql = "INSERT INTO " . $schedule['table'] .
-                            " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld) VALUES " .
-                            " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld)";
+                    // STORE
+                    $this->db->beginTransaction();
 
-                        $this->db->beginTransaction();
-
-                        foreach ($this->csv->data as $game) {
-                            $Spieldatum = date("Y-m-d", strtotime($game["Spieldatum"]));
-
-                            $Team = $game["Teamname A"] . $game["TeamLiga A"];
-                            if ($game["Vereinsnummer B"] == $this->config["Vereinsnummer"]) {
-                                $Team = $game["Teamname B"] . $game["TeamLiga B"];
-                            }
-                            $Team = preg_replace('/[^A-Za-z0-9\-]/', '', $Team);
-
-                            $values = array(
-                                ":Team" => $Team,
-                                ":SpielTyp" => $game['SpielTyp'],
-                                ":Spielstatus" => $game['Spielstatus'],
-                                ":Bezeichnung" => $game['Bezeichnung'],
-                                ":Spielnummer" => $game['Spielnummer'],
-                                ":TagKurz" => $game['TagKurz'],
-                                ":Spieldatum" => $Spieldatum,
-                                ":Spielzeit" => $game['Spielzeit'],
-                                ":TeamnameA" => $game['Teamname A'],
-                                ":TeamLigaA" => $game['TeamLiga A'],
-                                ":VereinsnummerA" => $game['Vereinsnummer A'],
-                                ":TeamnameB" => $game['Teamname B'],
-                                ":TeamLigaB" => $game['TeamLiga B'],
-                                ":VereinsnummerB" => $game['Vereinsnummer B'],
-                                ":Spielort" => $game['Spielort'],
-                                ":Sportanlage" => $game['Sportanlage'],
-                                ":Ort" => $game['Ort'],
-                                ":Wettspielfeld" => $game['Wettspielfeld']
-                            );
-
-                            $statement = $this->db->prepare($sql);
-                            $statement->execute($values);
-                            // add logging when error
+                    foreach ($this->csv->data as $game) {
+                        if (!$schedule['isCustom']) {
+                            $this->parseDefault($schedule['table'], $game);
                         }
-                        $this->db->commit();
-                        $this->logger->info("SCHEDULE DONE");
-                    } else {
-                        $this->logger->warning("FILE SIZE ZERO");
-                        mail($this->config['notification'], '[' . $key . '] FILESIZE ZERO', 'FILESIZE ZERO @' . date('d.m.Y'));
+                        else {
+                            $this->parseCustom($schedule['table'], $game);
+                        }
                     }
+                    $this->db->commit();
+                    $this->logger->info("SCHEDULE DONE");
+                } else {
+                    $this->logger->warning("FILE SIZE ZERO");
+                    mail($this->config['notification'], '[' . $key . '] FILESIZE ZERO', 'FILESIZE ZERO @' . date('d.m.Y'));
                 }
             }
         }
+    }
+
+    private function parseDefault($table, $game){
+        $sql = "INSERT INTO " . $table .
+            " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld) VALUES " .
+            " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld)";
+
+        $Spieldatum = date("Y-m-d", strtotime($game["Spieldatum"]));
+
+        $Team = $game["Teamname A"] . $game["TeamLiga A"];
+        if ($game["Vereinsnummer B"] == $this->config["Vereinsnummer"]) {
+            $Team = $game["Teamname B"] . $game["TeamLiga B"];
+        }
+        $Team = preg_replace('/[^A-Za-z0-9\-]/', '', $Team);
+
+        $values = array(
+            ":Team" => $Team,
+            ":SpielTyp" => $game['SpielTyp'],
+            ":Spielstatus" => $game['Spielstatus'],
+            ":Bezeichnung" => $game['Bezeichnung'],
+            ":Spielnummer" => $game['Spielnummer'],
+            ":TagKurz" => $game['TagKurz'],
+            ":Spieldatum" => $Spieldatum,
+            ":Spielzeit" => $game['Spielzeit'],
+            ":TeamnameA" => $game['Teamname A'],
+            ":TeamLigaA" => $game['TeamLiga A'],
+            ":VereinsnummerA" => $game['Vereinsnummer A'],
+            ":TeamnameB" => $game['Teamname B'],
+            ":TeamLigaB" => $game['TeamLiga B'],
+            ":VereinsnummerB" => $game['Vereinsnummer B'],
+            ":Spielort" => $game['Spielort'],
+            ":Sportanlage" => $game['Sportanlage'],
+            ":Ort" => $game['Ort'],
+            ":Wettspielfeld" => $game['Wettspielfeld']
+        );
+
+        $statement = $this->db->prepare($sql);
+        $statement->execute($values);
+        // add logging when error
+    }
+
+    private function parseCustom($table, $game){
+        $sql = "INSERT INTO " . $table .
+            " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld,bemerkungen) VALUES " .
+            " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld,:bemerkungen)";
+
+        $Spieldatum = date("Y-m-d", strtotime($game["Spieldatum"]));
+
+        $Team = $game["Teamname A"] . $game["TeamLiga A"];
+        if ($game["Vereinsnummer B"] == $this->config["Vereinsnummer"]) {
+            $Team = $game["Teamname B"] . $game["TeamLiga B"];
+        }
+        $Team = preg_replace('/[^A-Za-z0-9\-]/', '', $Team);
+
+        $values = array(
+            ":Team" => $Team,
+            ":SpielTyp" => $game['SpielTyp'],
+            ":Spielstatus" => $game['Spielstatus'],
+            ":Bezeichnung" => $game['Bezeichnung'],
+            ":Spielnummer" => $game['Spielnummer'],
+            ":TagKurz" => $game['TagKurz'],
+            ":Spieldatum" => $Spieldatum,
+            ":Spielzeit" => $game['Spielzeit'],
+            ":TeamnameA" => $game['Teamname A'],
+            ":TeamLigaA" => $game['TeamLiga A'],
+            ":VereinsnummerA" => $game['Vereinsnummer A'],
+            ":TeamnameB" => $game['Teamname B'],
+            ":TeamLigaB" => $game['TeamLiga B'],
+            ":VereinsnummerB" => $game['Vereinsnummer B'],
+            ":Spielort" => $game['Spielort'],
+            ":Sportanlage" => $game['Sportanlage'],
+            ":Ort" => $game['Ort'],
+            ":Wettspielfeld" => $game['Wettspielfeld'],
+            ":bemerkungen" => $game['bemerkungen']
+        );
+
+        $statement = $this->db->prepare($sql);
+        $statement->execute($values);
+        // add logging when error
     }
 }

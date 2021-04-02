@@ -1,7 +1,7 @@
 CREATE TABLE `spielplan` (
   `Team` varchar(100) NOT NULL,
   `SpielTyp` varchar(30) NOT NULL,
-  `Spielstatus` varchar(10) NOT NULL,
+  `Spielstatus` varchar(50) NOT NULL,
   `Bezeichnung` varchar(100) NOT NULL,
   `Spielnummer` int(10) NOT NULL,
   `TagKurz` varchar(2) NOT NULL,
