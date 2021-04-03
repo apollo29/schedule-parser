@@ -14,26 +14,6 @@ class ScheduleParser {
     private $csv;
     private $db;
 
-    private static $header = array(
-        "SpielTyp",
-        "Spielstatus",
-        "Bezeichnung",
-        "Spielnummer",
-        "TagKurz",
-        "Spieldatum",
-        "Spielzeit",
-        "Teamname A",
-        "TeamLiga A",
-        "Vereinsnummer A",
-        "Teamname B",
-        "TeamLiga B",
-        "Vereinsnummer B",
-        "Spielort",
-        "Sportanlage",
-        "Ort",
-        "Wettspielfeld"
-    );
-
     public function __construct($env = __DIR__, LoggerInterface $logger = null){
         $dotenv = Dotenv::createImmutable($env);
         $dotenv->load();
@@ -49,7 +29,7 @@ class ScheduleParser {
                 "database" => getenv('MYSQL_DATABASE'),
                 "tables" => array(
                     "default" => getenv('PARSER_TABLE_DEFAULT'),
-                    "custom" => getenv('spielplan_custom')
+                    "custom" => getenv('PARSER_TABLE_CUSTOM')
                 )
             )
         );
@@ -63,9 +43,22 @@ class ScheduleParser {
             foreach ($schedules as $key => $schedule){
                 $file = file_get_contents($schedule['url']);
                 if (!empty($file)) {
+                    $table = $schedule['table'];
+                    if (empty($table)){
+                        if (!$schedule['isCustom']) {
+                            $table = $this->config['db']['tables']['default'];
+                        }
+                        else {
+                            $table = $this->config['db']['tables']['custom'];
+                        }
+                    }
+
                     // RESET
-                    $sql = "DELETE FROM " . $schedule['table'];
-                    $this->db->query($sql);
+                    $sql = "SELECT Spielnummer FROM ".$table." WHERE VereinsnummerA = :Vereinsnummer OR VereinsnummerB = :Vereinsnummer ORDER BY Spieldatum";
+                    $values = array(":Vereinsnummer" => $this->config['Vereinsnummer']);
+                    $statement = $this->db->prepare($sql);
+                    $statement->execute($values);
+                    $games = $statement->fetchAll(PDO::FETCH_COLUMN);
 
                     $this->csv->encoding('windows-1252', 'UTF-8');
                     $this->csv->auto($file);
@@ -75,10 +68,10 @@ class ScheduleParser {
 
                     foreach ($this->csv->data as $game) {
                         if (!$schedule['isCustom']) {
-                            $this->parseDefault($schedule['table'], $game);
+                            $this->parseDefault($table, $game, in_array($game['Spielnummer'], $games));
                         }
                         else {
-                            $this->parseCustom($schedule['table'], $game);
+                            $this->parseCustom($table, $game, in_array($game['Spielnummer'], $games));
                         }
                     }
                     $this->db->commit();
@@ -91,11 +84,18 @@ class ScheduleParser {
         }
     }
 
-    private function parseDefault($table, $game){
-        $sql = "INSERT INTO " . $table .
-            " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld) VALUES " .
-            " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld)";
-
+    private function parseDefault($table, $game, $update = false){
+        if (!$update) {
+            $sql = "INSERT INTO " . $table .
+                " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld) VALUES " .
+                " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld)";
+        }
+        else {
+            $sql = "UPDATE " . $table . "SET ".
+                "Team = :Team, SpielTyp = :SpielTyp, Spielstatus = :Spielstatus, Bezeichnung = :Bezeichnung, TagKurz = :TagKurz, Spieldatum = :Spieldatum, Spielzeit = :Spielzeit, TeamnameA = :TeamnameA, VereinsnummerA = :VereinsnummerA, TeamLigaA = :TeamLigaA, TeamnameB = :TeamnameB, VereinsnummerB = :VereinsnummerB, TeamLigaB = :TeamLigaB, Spielort = :Spielort, Sportanlage = :Sportanlage, Ort = :Ort, Wettspielfeld = :Wettspielfeld ".
+                "WHERE Spielnummer = :Spielnummer";
+        }        
+        
         $Spieldatum = date("Y-m-d", strtotime($game["Spieldatum"]));
 
         $Team = $game["Teamname A"] . $game["TeamLiga A"];
@@ -130,10 +130,17 @@ class ScheduleParser {
         // add logging when error
     }
 
-    private function parseCustom($table, $game){
-        $sql = "INSERT INTO " . $table .
-            " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld,bemerkungen) VALUES " .
-            " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld,:bemerkungen)";
+    private function parseCustom($table, $game, $update = false){
+        if (!$update) {
+            $sql = "INSERT INTO " . $table .
+                " (Team,SpielTyp,Spielstatus,Bezeichnung,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld,bemerkungen) VALUES " .
+                " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld,:bemerkungen)";
+        }
+        else {
+            $sql = "UPDATE " . $table . "SET ".
+                "Team = :Team, SpielTyp = :SpielTyp, Spielstatus = :Spielstatus, Bezeichnung = :Bezeichnung, TagKurz = :TagKurz, Spieldatum = :Spieldatum, Spielzeit = :Spielzeit, TeamnameA = :TeamnameA, VereinsnummerA = :VereinsnummerA, TeamLigaA = :TeamLigaA, TeamnameB = :TeamnameB, VereinsnummerB = :VereinsnummerB, TeamLigaB = :TeamLigaB, Spielort = :Spielort, Sportanlage = :Sportanlage, Ort = :Ort, Wettspielfeld = :Wettspielfeld, bemerkungen = :bemerkungen ".
+                "WHERE Spielnummer = :Spielnummer";
+        }
 
         $Spieldatum = date("Y-m-d", strtotime($game["Spieldatum"]));
 
@@ -148,7 +155,6 @@ class ScheduleParser {
             ":SpielTyp" => $game['SpielTyp'],
             ":Spielstatus" => $game['Spielstatus'],
             ":Bezeichnung" => $game['Bezeichnung'],
-            ":Spielnummer" => $game['Spielnummer'],
             ":TagKurz" => $game['TagKurz'],
             ":Spieldatum" => $Spieldatum,
             ":Spielzeit" => $game['Spielzeit'],
