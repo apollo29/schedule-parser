@@ -20,7 +20,7 @@ class ScheduleParser {
         $dotenv = Dotenv::createImmutable($dir);
         $dotenv->load();
 
-        $this->logger = $this->logger(getenv('PARSER_NAME'), $dir);
+        $this->logger = $this->logger("ScheduleParser", $dir);
         $this->csv = new Csv();
         $this->db = new PDO('mysql:host='.getenv('MYSQL_HOST').';dbname='.getenv('MYSQL_DATABASE'), getenv('MYSQL_USER'), getenv('MYSQL_PASS'));
     }

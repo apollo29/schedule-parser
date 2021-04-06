@@ -1,5 +1,7 @@
 <?php
 
+use ScheduleParser\ScheduleParser;
+
 require '../vendor/autoload.php';
 
 $schedules = array(
@@ -20,6 +22,6 @@ $schedules = array(
     )
 );
 
-$parser = new \ScheduleParser\ScheduleParser(__DIR__);
+$parser = new ScheduleParser(__DIR__);
 
 $parser->parse($schedules);
