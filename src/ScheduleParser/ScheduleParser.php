@@ -65,10 +65,7 @@ class ScheduleParser {
                         $values = $this->values($game, $Vereinsnummer, $schedule['custom']);
 
                         $statement = $this->db->prepare($sql);
-                        $result = $statement->execute($values);
-                        if ($result) {
-                            $this->logger->info("{$key} - {$Vereinsnummer} :: JOB {$result}");
-                        }
+                        $statement->execute($values);
                     }
                     $this->db->commit();
                     $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
