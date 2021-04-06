@@ -4,8 +4,7 @@
     "type": "library",
     "autoload": {
         "psr-4": {
-            "ScheduleParser\\": "src/ScheduleParser/",
-            "ResultParser\\": "src/ResultParser/"
+            "ScheduleParser\\": "src/ScheduleParser/"
         }
     },
     "require": {
