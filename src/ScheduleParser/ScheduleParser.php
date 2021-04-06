@@ -61,12 +61,14 @@ class ScheduleParser {
                     $this->db->beginTransaction();
 
                     foreach ($this->csv->data as $game) {
-                        $sql = $this->statement($schedule['table'], $schedule['custom'], in_array($game['Spielnummer'], $games));
-                        $values = $this->values($game, $Vereinsnummer, $schedule['custom']);
+                        $custom = array_key_exists('custom', $schedule) ? $schedule['custom'] : false;
+                        $sql = $this->statement($schedule['table'], $custom, in_array($game['Spielnummer'], $games));
+                        $values = $this->values($game, $Vereinsnummer, $custom);
 
                         $statement = $this->db->prepare($sql);
                         $statement->execute($values);
                     }
+
                     $this->db->commit();
                     $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
                 } else {
