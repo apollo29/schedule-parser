@@ -48,11 +48,7 @@ class ScheduleParser {
                 $file = file_get_contents($schedule['url']);
                 if (!empty($file)) {
                     // RESET
-                    $sql = "SELECT Spielnummer FROM ".$schedule['table']." WHERE VereinsnummerA = :Vereinsnummer OR VereinsnummerB = :Vereinsnummer ORDER BY Spieldatum";
-                    $values = array(":Vereinsnummer" => $Vereinsnummer);
-                    $statement = $this->db->prepare($sql);
-                    $statement->execute($values);
-                    $games = $statement->fetchAll(PDO::FETCH_COLUMN);
+                    $games = $this->reset($key, $schedule['table'], $Vereinsnummer);
 
                     $this->csv->encoding('windows-1252', 'UTF-8');
                     $this->csv->auto($file);
@@ -78,6 +74,26 @@ class ScheduleParser {
                 }
             }
         }
+    }
+
+    private function reset(string $key, string $table, string $Vereinsnummer) :  array {
+        // REMOVE old values
+        if (date("w")==5) {
+            $previous_week = date("Y-m-d", strtotime("-1 week"));
+            $sql = "DELETE FROM " . $table . " WHERE Spieldatum < :datum";
+            $values = array(":datum" => $previous_week);
+            $statement = $this->db->prepare($sql);
+            $statement->execute($values);
+
+            $this->logger->info("{$key} - {$Vereinsnummer} :: RESET DONE, CLEARED OLD VALUES {$previous_week}");
+        }
+
+        // GATHER all games
+        $sql = "SELECT Spielnummer FROM ".$table." WHERE VereinsnummerA = :Vereinsnummer OR VereinsnummerB = :Vereinsnummer ORDER BY Spieldatum";
+        $values = array(":Vereinsnummer" => $Vereinsnummer);
+        $statement = $this->db->prepare($sql);
+        $statement->execute($values);
+        return $statement->fetchAll(PDO::FETCH_COLUMN);
     }
 
     private function statement(string $table, bool $custom, bool $update) : string {
