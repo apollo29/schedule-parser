@@ -131,8 +131,8 @@ class ScheduleParser {
             $values = array(
                 ":Team" => $Team,
                 ":SpielTyp" => $game['SpielTyp'],
-                ":Spielstatus" => $game['Spielstatus'],
-                ":Bezeichnung" => $game['Bezeichnung'],
+                ":Spielstatus" => self::emptyAsNull($game['Spielstatus']),
+                ":Bezeichnung" => self::emptyAsNull($game['Bezeichnung']),
                 ":Spielnummer" => $game['Spielnummer'],
                 ":TagKurz" => $game['TagKurz'],
                 ":Spieldatum" => $Spieldatum,
@@ -153,8 +153,8 @@ class ScheduleParser {
             $values = array(
                 ":Team" => $Team,
                 ":SpielTyp" => $game['SpielTyp'],
-                ":Spielstatus" => $game['Spielstatus'],
-                ":Bezeichnung" => $game['Bezeichnung'],
+                ":Spielstatus" => self::emptyAsNull($game['Spielstatus']),
+                ":Bezeichnung" => self::emptyAsNull($game['Bezeichnung']),
                 ":TagKurz" => $game['TagKurz'],
                 ":Spieldatum" => $Spieldatum,
                 ":Spielzeit" => $game['Spielzeit'],
@@ -186,5 +186,12 @@ class ScheduleParser {
         $Team = preg_replace('/[^A-Za-z0-9\-]/', '', $Team);
 
         return $Team;
+    }
+
+    private static function emptyAsNull(string $string) : ?string {
+        if (!empty($string)){
+            return $string;
+        }
+        return null;
     }
 }

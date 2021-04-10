@@ -1,8 +1,8 @@
 CREATE TABLE `spielplan` (
   `Team` varchar(100) NOT NULL,
   `SpielTyp` varchar(30) NOT NULL,
-  `Spielstatus` varchar(50) NOT NULL,
-  `Bezeichnung` varchar(100) NOT NULL,
+  `Spielstatus` varchar(50) DEFAULT NULL,
+  `Bezeichnung` varchar(100) DEFAULT NULL,
   `Spielnummer` int(10) NOT NULL,
   `TagKurz` varchar(2) NOT NULL,
   `Spieldatum` date NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE `spielplan` (
 
 
 ALTER TABLE `spielplan`
-  ADD PRIMARY KEY (`Spieldatum`),
+  ADD PRIMARY KEY (`Spielnummer`),
   ADD KEY `Team` (`Team`),
   ADD KEY `SpielTyp` (`SpielTyp`),
   ADD KEY `VereinsnummerA` (`VereinsnummerA`),
