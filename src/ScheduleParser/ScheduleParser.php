@@ -12,8 +12,8 @@ use Psr\Log\LoggerInterface;
 
 class ScheduleParser {
 
-    private $logger;
-    private $csv;
+    protected $logger;
+    protected $csv;
     private $db;
 
     public function __construct($dir = __DIR__){
@@ -47,26 +47,10 @@ class ScheduleParser {
             foreach ($schedules['schedules'] as $key => $schedule){
                 $file = file_get_contents($schedule['url']);
                 if (!empty($file)) {
-                    // RESET
-                    $games = $this->reset($key, $schedule['table'], $Vereinsnummer);
-
                     $this->csv->encoding('windows-1252', 'UTF-8');
                     $this->csv->auto($file);
 
-                    // STORE
-                    $this->db->beginTransaction();
-
-                    foreach ($this->csv->data as $game) {
-                        $custom = array_key_exists('custom', $schedule) ? $schedule['custom'] : false;
-                        $sql = $this->statement($schedule['table'], $custom, in_array($game['Spielnummer'], $games));
-                        $values = $this->values($game, $Vereinsnummer, $custom);
-
-                        $statement = $this->db->prepare($sql);
-                        $statement->execute($values);
-                    }
-
-                    $this->db->commit();
-                    $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
+                    $this->execute($key, $schedule, $Vereinsnummer);
                 } else {
                     $message = "{$key} - {$Vereinsnummer} :: FILE SIZE ZERO";
                     $this->logger->warning($message);
@@ -74,6 +58,26 @@ class ScheduleParser {
                 }
             }
         }
+    }
+
+    protected function execute(string $key, array $schedule, string $Vereinsnummer){
+            // RESET
+            $games = $this->reset($key, $schedule['table'], $Vereinsnummer);
+
+            // STORE
+            $this->db->beginTransaction();
+
+            foreach ($this->csv->data as $game) {
+                $custom = array_key_exists('custom', $schedule) ? $schedule['custom'] : false;
+                $sql = $this->statement($schedule['table'], $custom, in_array($game['Spielnummer'], $games));
+                $values = $this->values($game, $Vereinsnummer, $custom);
+
+                $statement = $this->db->prepare($sql);
+                $statement->execute($values);
+            }
+
+            $this->db->commit();
+            $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
     }
 
     private function reset(string $key, string $table, string $Vereinsnummer) :  array {

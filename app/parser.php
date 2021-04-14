@@ -1,6 +1,7 @@
 <?php
 
 use ScheduleParser\ScheduleParser;
+use ScheduleParser\SFVScheduleParser;
 
 require '../vendor/autoload.php';
 
@@ -22,6 +23,6 @@ $schedules = array(
     )
 );
 
-$parser = new ScheduleParser(__DIR__);
+$parser = new SFVScheduleParser(__DIR__);
 
 $parser->parse($schedules);
