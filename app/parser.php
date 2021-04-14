@@ -1,6 +1,5 @@
 <?php
 
-use ScheduleParser\ScheduleParser;
 use ScheduleParser\SFVScheduleParser;
 
 require '../vendor/autoload.php';
