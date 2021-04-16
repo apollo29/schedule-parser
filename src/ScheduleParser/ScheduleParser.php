@@ -47,7 +47,7 @@ class ScheduleParser {
             foreach ($schedules['schedules'] as $key => $schedule){
                 $file = file_get_contents($schedule['url']);
                 if (!empty($file)) {
-                    $this->csv->encoding('windows-1252', 'UTF-8');
+                    //$this->csv->encoding('windows-1252', 'UTF-8');
                     $this->csv->auto($file);
 
                     $this->execute($key, $schedule, $Vereinsnummer);
