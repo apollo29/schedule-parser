@@ -1,18 +1,9 @@
 <?php
 namespace ScheduleParser;
 
-
-use Dotenv\Dotenv;
-use Monolog\Handler\StreamHandler;
-use Monolog\Logger;
-use Monolog\Processor\UidProcessor;
-use ParseCsv\Csv;
-use PDO;
-use Psr\Log\LoggerInterface;
-
 class SFVScheduleParser extends ScheduleParser {
 
-    private static $url = "http://www.football.ch/portaldata/1/nisrd/WebService/verein/calendar.asmx/Verein?v={VEREINSID}&away=1&sp=de&format=csv";
+    private static string $url = "http://www.football.ch/portaldata/1/nisrd/WebService/verein/calendar.asmx/Verein?v={VEREINSID}&away=1&sp=de&format=csv";
 
     public function parse(array $schedules) {
         if (is_array($schedules) && is_array($schedules['schedules'])){
@@ -22,7 +13,9 @@ class SFVScheduleParser extends ScheduleParser {
             foreach ($schedules['schedules'] as $key => $schedule){
                 $file = $this->contents($schedule, $VereinsId);
                 if (!empty($file)) {
-                    $this->csv->encoding('windows-1252', 'UTF-8');
+                    if ($this->nonUtf8Encoding) {
+                        $this->csv->encoding($this->encoding, 'UTF-8');
+                    }
                     $this->csv->auto($file);
 
                     $this->execute($key, $schedule, $Vereinsnummer);
