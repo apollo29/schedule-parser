@@ -2,6 +2,7 @@
 namespace ScheduleParser;
 
 
+use Cake\Database\Connection;
 use Dotenv\Dotenv;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
@@ -9,26 +10,81 @@ use Monolog\Processor\UidProcessor;
 use ParseCsv\Csv;
 use PDO;
 use Psr\Log\LoggerInterface;
+use ScheduleParser\Domain\CustomSchedule\Data\CustomScheduleData;
+use ScheduleParser\Domain\CustomSchedule\Repository\CustomScheduleRepository;
+use ScheduleParser\Domain\Schedule\Data\ScheduleData;
+use ScheduleParser\Domain\Schedule\Repository\ScheduleRepository;
+use ScheduleParser\Factory\QueryFactory;
+use ScheduleParser\Support\Hydrator;
 
 class ScheduleParser {
 
+    protected ScheduleRepository $repository;
+    protected CustomScheduleRepository $customRepository;
     protected LoggerInterface $logger;
     protected Csv $csv;
-    private PDO $db;
 
     protected bool $nonUtf8Encoding;
-    protected string $encoding = "windows-1252";
+    protected string $encoding;
 
-    public function __construct($dir = __DIR__, bool $nonUtf8Encoding = false, string $encoding = ""){
+    public function __construct(string $dir, bool $nonUtf8Encoding = false, string $encoding = ""){
         $dotenv = Dotenv::createImmutable($dir);
         $dotenv->load();
 
+        $this->repository = $this->createRepository();
+        $this->customRepository = $this->createCustomRepository();
         $this->logger = $this->logger("ScheduleParser", $dir);
         $this->csv = new Csv();
-        $this->db = new PDO('mysql:host='.getenv('MYSQL_HOST').';dbname='.getenv('MYSQL_DATABASE'), getenv('MYSQL_USER'), getenv('MYSQL_PASS'));
 
         $this->nonUtf8Encoding=$nonUtf8Encoding;
         $this->encoding=$encoding;
+    }
+
+    private function queryFactory(): QueryFactory {
+        // Database settings
+        $settings['db'] = [
+            'driver' => \Cake\Database\Driver\Mysql::class,
+            'encoding' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            // Enable identifier quoting
+            'quoteIdentifiers' => true,
+            // Set to null to use MySQL servers timezone
+            'timezone' => null,
+            // Disable meta data cache
+            'cacheMetadata' => false,
+            // Disable query logging
+            'log' => false,
+            // PDO options
+            'flags' => [
+                // Turn off persistent connections
+                PDO::ATTR_PERSISTENT => false,
+                // Enable exceptions
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                // Emulate prepared statements
+                PDO::ATTR_EMULATE_PREPARES => true,
+                // Set default fetch mode to array
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                // Convert numeric values to strings when fetching.
+                // Since PHP 8.1 integers and floats in result sets will be returned using native PHP types.
+                // This option restores the previous behavior.
+                PDO::ATTR_STRINGIFY_FETCHES => true,
+            ],
+        ];
+        $settings['db']['host'] = getenv('MYSQL_HOST');
+        $settings['db']['database'] = getenv('MYSQL_DATABASE');
+        $settings['db']['username'] = getenv('MYSQL_USER');
+        $settings['db']['password'] = getenv('MYSQL_PASS');
+
+        $connection = new Connection($settings['db']);
+        return new QueryFactory($connection);
+    }
+
+    private function createRepository(): ScheduleRepository {
+        return new ScheduleRepository($this->queryFactory(), new Hydrator());
+    }
+
+    private function createCustomRepository(): CustomScheduleRepository {
+        return new CustomScheduleRepository($this->queryFactory(), new Hydrator());
     }
 
     private function logger($name, $dir) : LoggerInterface {
@@ -48,10 +104,10 @@ class ScheduleParser {
 
     public function parse(array $schedules) {
         if (is_array($schedules) && is_array($schedules['schedules'])){
-            $Vereinsnummer = $schedules['Vereinsnummer'];
+            $Vereinsnummer = $schedules['settings']['Vereinsnummer'];
 
             foreach ($schedules['schedules'] as $key => $schedule){
-                $file = file_get_contents($schedule['url']);
+                $file = $this->contents($schedule, $schedules['settings']);
                 if (!empty($file)) {
                     if ($this->nonUtf8Encoding) {
                         $this->csv->encoding($this->encoding, 'UTF-8');
@@ -68,126 +124,67 @@ class ScheduleParser {
         }
     }
 
+    public function contents(array $schedule, array $settings): string
+    {
+        return file_get_contents($schedule['url']);
+    }
+
     protected function execute(string $key, array $schedule, string $Vereinsnummer){
             $custom = array_key_exists('custom', $schedule) ? $schedule['custom'] : false;
 
             // RESET
-            $games = $this->reset($key, $schedule['table'], $Vereinsnummer, $custom);
+            $games = $this->reset($key, $Vereinsnummer, $custom);
 
             // STORE
-            $this->db->beginTransaction();
-
             foreach ($this->csv->data as $game) {
-                $sql = $this->statement($schedule['table'], $custom, in_array($game['Spielnummer'], $games));
-                $values = $this->values($game, $Vereinsnummer, $custom);
+                // PREPARE
+                $game['Team'] = $this->Team($game, $Vereinsnummer);
+                $game['Spieldatum'] = $this->Spieldatum($game);
 
-                $statement = $this->db->prepare($sql);
-                $statement->execute($values);
+                $schedule = new ScheduleData($game);
+                if ($custom){
+                    $schedule = new CustomScheduleData($game);
+                }
+
+                if (in_array($game['Spielnummer'], $games)){
+                    // UPDATE
+                    if (!$custom) {
+                        $this->repository->update($schedule);
+                    }
+                    else {
+                        $this->customRepository->update($schedule);
+                    }
+                }
+                else {
+                    // INSERT
+                    if (!$custom) {
+                        $this->repository->insert($schedule);
+                    }
+                    else {
+                        $this->customRepository->insert($schedule);
+                    }
+                }
             }
 
-            $this->db->commit();
             $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
     }
 
-    private function reset(string $key, string $table, string $Vereinsnummer, bool $custom = false) :  array {
+    private function reset(string $key, string $Vereinsnummer, bool $custom = false) :  array {
         // REMOVE old values
         if (!$custom){
             if (date("w")==5) {
-                $previous_week = date("Y-m-d", strtotime("-1 week"));
-                $sql = "DELETE FROM " . $table . " WHERE Spieldatum < :datum";
-                $values = array(":datum" => $previous_week);
-                $statement = $this->db->prepare($sql);
-                $statement->execute($values);
-
-                $this->logger->info("{$key} - {$Vereinsnummer} :: RESET DONE, CLEARED OLD VALUES {$previous_week}");
+                $this->repository->reset();
+                $this->logger->info("{$key} - {$Vereinsnummer} :: RESET DONE, CLEARED OLD VALUES");
             }
 
             // GATHER all games
-            $sql = "SELECT Spielnummer FROM ".$table." WHERE VereinsnummerA = :Vereinsnummer OR VereinsnummerB = :Vereinsnummer ORDER BY Spieldatum";
-            $values = array(":Vereinsnummer" => $Vereinsnummer);
-            $statement = $this->db->prepare($sql);
-            $statement->execute($values);
-            return $statement->fetchAll(PDO::FETCH_COLUMN);
+            return $this->repository->findAll($Vereinsnummer);
         }
         else {
-            $sql = "DELETE FROM " . $table;
-            $this->db->query($sql);
-
+            $this->customRepository->reset();
             $this->logger->info("{$key} - {$Vereinsnummer} :: RESET DONE, CLEARED OLD CUSTOM VALUES");
             return array();
         }
-    }
-
-    private function statement(string $table, bool $custom, bool $update) : string {
-        if (!$custom){
-            if (!$update) {
-                $sql = "INSERT INTO " . $table .
-                    " (Team,SpielTyp,Spielstatus,Bezeichnung,Spielnummer,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld) VALUES " .
-                    " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:Spielnummer,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld)";
-            }
-            else {
-                $sql = "UPDATE " . $table . " SET ".
-                    "Team = :Team, SpielTyp = :SpielTyp, Spielstatus = :Spielstatus, Bezeichnung = :Bezeichnung, TagKurz = :TagKurz, Spieldatum = :Spieldatum, Spielzeit = :Spielzeit, TeamnameA = :TeamnameA, VereinsnummerA = :VereinsnummerA, TeamLigaA = :TeamLigaA, TeamnameB = :TeamnameB, VereinsnummerB = :VereinsnummerB, TeamLigaB = :TeamLigaB, Spielort = :Spielort, Sportanlage = :Sportanlage, Ort = :Ort, Wettspielfeld = :Wettspielfeld ".
-                    "WHERE Spielnummer = :Spielnummer";
-            }
-        }
-        else {
-            $sql = "INSERT INTO " . $table .
-                " (Team,SpielTyp,Spielstatus,Bezeichnung,TagKurz,Spieldatum,Spielzeit,TeamnameA,VereinsnummerA,TeamLigaA,TeamnameB,VereinsnummerB,TeamLigaB,Spielort,Sportanlage,Ort,Wettspielfeld,bemerkungen) VALUES " .
-                " (:Team,:SpielTyp,:Spielstatus,:Bezeichnung,:TagKurz,:Spieldatum,:Spielzeit,:TeamnameA,:VereinsnummerA,:TeamLigaA,:TeamnameB,:VereinsnummerB,:TeamLigaB,:Spielort,:Sportanlage,:Ort,:Wettspielfeld,:bemerkungen)";
-        }
-        return $sql;
-    }
-
-    private function values(array $game, string $vereinsnummer, bool $custom) : array {
-        $Team = $this->Team($game, $vereinsnummer);
-        $Spieldatum = $this->Spieldatum($game);
-
-        if (!$custom){
-            $values = array(
-                ":Team" => $Team,
-                ":SpielTyp" => $game['SpielTyp'],
-                ":Spielstatus" => self::emptyAsNull($game['Spielstatus']),
-                ":Bezeichnung" => self::emptyAsNull($game['Bezeichnung']),
-                ":Spielnummer" => $game['Spielnummer'],
-                ":TagKurz" => $game['TagKurz'],
-                ":Spieldatum" => $Spieldatum,
-                ":Spielzeit" => $game['Spielzeit'],
-                ":TeamnameA" => $game['Teamname A'],
-                ":TeamLigaA" => $game['TeamLiga A'],
-                ":VereinsnummerA" => $game['Vereinsnummer A'],
-                ":TeamnameB" => $game['Teamname B'],
-                ":TeamLigaB" => $game['TeamLiga B'],
-                ":VereinsnummerB" => $game['Vereinsnummer B'],
-                ":Spielort" => $game['Spielort'],
-                ":Sportanlage" => $game['Sportanlage'],
-                ":Ort" => $game['Ort'],
-                ":Wettspielfeld" => $game['Wettspielfeld']
-            );
-        }
-        else {
-            $values = array(
-                ":Team" => $Team,
-                ":SpielTyp" => $game['SpielTyp'],
-                ":Spielstatus" => self::emptyAsNull($game['Spielstatus']),
-                ":Bezeichnung" => self::emptyAsNull($game['Bezeichnung']),
-                ":TagKurz" => $game['TagKurz'],
-                ":Spieldatum" => $Spieldatum,
-                ":Spielzeit" => $game['Spielzeit'],
-                ":TeamnameA" => $game['Teamname A'],
-                ":TeamLigaA" => $game['TeamLiga A'],
-                ":VereinsnummerA" => $game['Vereinsnummer A'],
-                ":TeamnameB" => $game['Teamname B'],
-                ":TeamLigaB" => $game['TeamLiga B'],
-                ":VereinsnummerB" => $game['Vereinsnummer B'],
-                ":Spielort" => $game['Spielort'],
-                ":Sportanlage" => $game['Sportanlage'],
-                ":Ort" => $game['Ort'],
-                ":Wettspielfeld" => $game['Wettspielfeld'],
-                ":bemerkungen" => $game['bemerkungen']
-            );
-        }
-        return $values;
     }
 
     private function Spieldatum(array $game) : string {
@@ -202,12 +199,5 @@ class ScheduleParser {
         $Team = preg_replace('/[^A-Za-z0-9\-]/', '', $Team);
 
         return $Team;
-    }
-
-    private static function emptyAsNull(string $string) : ?string {
-        if (!empty($string)){
-            return $string;
-        }
-        return null;
     }
 }

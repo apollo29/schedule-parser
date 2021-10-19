@@ -8,13 +8,19 @@
         }
     },
     "require": {
+        "php": "^7.4 || ^8.0",
         "parsecsv/php-parsecsv": "^1.2",
         "ext-mysqli": "*",
         "ext-json": "*",
         "ext-pdo": "*",
         "vlucas/phpdotenv": "^4.1",
         "psr/log": "^1.1",
-        "monolog/monolog": "^2.2"
+        "monolog/monolog": "^2.2",
+        "selective/array-reader": "^1.1",
+        "selective/validation": "^2",
+        "cakephp/chronos": "^2",
+        "cakephp/database": "^4",
+        "cakephp/validation": "^4.2"
     },
     "license": "MIT",
     "authors": [
