@@ -15,6 +15,8 @@ class CustomScheduleRepository
     private QueryFactory $queryFactory;
 
     private Hydrator $hydrator;
+    
+    private string $table;
 
     /**
      * The constructor.
@@ -22,10 +24,21 @@ class CustomScheduleRepository
      * @param QueryFactory $queryFactory The query factory
      * @param Hydrator $hydrator The hydrator
      */
-    public function __construct(QueryFactory $queryFactory, Hydrator $hydrator)
+    public function __construct(QueryFactory $queryFactory, Hydrator $hydrator, string $table = 'custom_schedule')
     {
         $this->queryFactory = $queryFactory;
         $this->hydrator = $hydrator;
+        $this->table = $table;
+    }
+
+    /**
+     * Set the custom table name.
+     *
+     * @param string $table The custom table name
+     */
+    public function table(string $table): void
+    {
+        $this->table = $table;
     }
 
     /**
@@ -37,7 +50,7 @@ class CustomScheduleRepository
      */
     public function insert(CustomScheduleData $data): int
     {
-        return (int)$this->queryFactory->newInsert('custom_schedule', $data->toRow())
+        return (int)$this->queryFactory->newInsert($this->table, $data->toRow())
             ->execute()
             ->lastInsertId();
     }
@@ -53,10 +66,11 @@ class CustomScheduleRepository
      */
     public function read(int $spielnummer): CustomScheduleData
     {
-        $query = $this->queryFactory->newSelect('custom_schedule');
+        $query = $this->queryFactory->newSelect($this->table);
         $query->select(
             [
-                'Team',
+                'TeamA',
+                'TeamB',
                 'SpielTyp',
                 'Spielstatus',
                 'Bezeichnung',
@@ -99,7 +113,7 @@ class CustomScheduleRepository
     {
         $row = $data->toRow();
 
-        $this->queryFactory->newUpdate('custom_schedule', $row)
+        $this->queryFactory->newUpdate($this->table, $row)
             ->andWhere(['Spielnummer' => $data->Spielnummer])
             ->execute();
     }
@@ -113,7 +127,7 @@ class CustomScheduleRepository
      */
     public function delete(int $spielnummer): void
     {
-        $this->queryFactory->newDelete('custom_schedule')
+        $this->queryFactory->newDelete($this->table)
             ->andWhere(['Spielnummer' => $spielnummer])
             ->execute();
     }
@@ -125,7 +139,7 @@ class CustomScheduleRepository
      */
     public function reset(): void
     {
-        $this->queryFactory->newDelete('custom_schedule')
+        $this->queryFactory->newDelete($this->table)
             ->execute();
     }
 
@@ -136,7 +150,7 @@ class CustomScheduleRepository
      */
     public function findAll(string $vereinsnummer): array
     {
-        $query = $this->queryFactory->newSelect('custom_schedule');
+        $query = $this->queryFactory->newSelect($this->table);
         $query->select('Spielnummer')
             ->where(['OR' => ['VereinsnummerA' => $vereinsnummer, 'VereinsnummerB <' => $vereinsnummer]])
             ->order('Spieldatum');

@@ -130,43 +130,49 @@ class ScheduleParser {
     }
 
     protected function execute(string $key, array $schedule, string $Vereinsnummer){
-            $custom = array_key_exists('custom', $schedule) ? $schedule['custom'] : false;
+        $custom = array_key_exists('custom', $schedule) ? $schedule['custom'] : false;
 
-            // RESET
-            $games = $this->reset($key, $Vereinsnummer, $custom);
+        // SETUP
+        if ($custom && array_key_exists('table', $schedule)){
+            $this->customRepository->table($schedule['table']);
+        }
 
-            // STORE
-            foreach ($this->csv->data as $game) {
-                // PREPARE
-                $game['Team'] = $this->Team($game, $Vereinsnummer);
-                $game['Spieldatum'] = $this->Spieldatum($game);
+        // RESET
+        $games = $this->reset($key, $Vereinsnummer, $custom);
 
-                $schedule = new ScheduleData($game);
-                if ($custom){
-                    $schedule = new CustomScheduleData($game);
-                }
+        // STORE
+        foreach ($this->csv->data as $game) {
+            // PREPARE
+            $game['TeamA'] = $this->TeamA($game);
+            $game['TeamB'] = $this->TeamB($game);
+            $game['Spieldatum'] = $this->Spieldatum($game);
 
-                if (in_array($game['Spielnummer'], $games)){
-                    // UPDATE
-                    if (!$custom) {
-                        $this->repository->update($schedule);
-                    }
-                    else {
-                        $this->customRepository->update($schedule);
-                    }
-                }
-                else {
-                    // INSERT
-                    if (!$custom) {
-                        $this->repository->insert($schedule);
-                    }
-                    else {
-                        $this->customRepository->insert($schedule);
-                    }
-                }
+            $schedule = new ScheduleData($game);
+            if ($custom){
+                $schedule = new CustomScheduleData($game);
             }
 
-            $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
+            if (in_array($game['Spielnummer'], $games)){
+                // UPDATE
+                if (!$custom) {
+                    $this->repository->update($schedule);
+                }
+                else {
+                    $this->customRepository->update($schedule);
+                }
+            }
+            else {
+                // INSERT
+                if (!$custom) {
+                    $this->repository->insert($schedule);
+                }
+                else {
+                    $this->customRepository->insert($schedule);
+                }
+            }
+        }
+
+        $this->logger->info("{$key} - {$Vereinsnummer} :: SCHEDULE DONE");
     }
 
     private function reset(string $key, string $Vereinsnummer, bool $custom = false) :  array {
@@ -191,9 +197,17 @@ class ScheduleParser {
         return date("Y-m-d", strtotime($game["Spieldatum"]));
     }
 
-    private function Team(array $game, string $vereinsnummer) : string {
+    private function TeamA(array $game) : string {
+        return $this->Team($game, "A");
+    }
+
+    private function TeamB(array $game) : string {
+        return $this->Team($game, "B");
+    }
+
+    private function Team(array $game, string $type) : string {
         $Team = $game["Teamname A"] . $game["TeamLiga A"];
-        if ($game["Vereinsnummer B"] == $vereinsnummer) {
+        if ($type=="B") {
             $Team = $game["Teamname B"] . $game["TeamLiga B"];
         }
         $Team = preg_replace('/[^A-Za-z0-9\-]/', '', $Team);

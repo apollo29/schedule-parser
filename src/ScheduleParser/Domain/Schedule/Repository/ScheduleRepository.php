@@ -57,7 +57,8 @@ class ScheduleRepository
         $query = $this->queryFactory->newSelect('schedule');
         $query->select(
             [
-                'Team',
+                'TeamA',
+                'TeamB',
                 'SpielTyp',
                 'Spielstatus',
                 'Bezeichnung',

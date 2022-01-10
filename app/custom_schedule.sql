@@ -1,5 +1,6 @@
-CREATE TABLE `spielplan_custom` (
-  `Team` varchar(100) NOT NULL,
+CREATE TABLE `custom_schedule` (
+  `TeamA` varchar(100) NOT NULL,
+  `TeamB` varchar(100) NOT NULL,
   `SpielTyp` varchar(30) NOT NULL,
   `Spielstatus` varchar(50) DEFAULT NULL,
   `Bezeichnung` varchar(100) DEFAULT NULL,
@@ -20,9 +21,10 @@ CREATE TABLE `spielplan_custom` (
   `bemerkungen` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-ALTER TABLE `spielplan_custom`
+ALTER TABLE `custom_schedule`
   ADD PRIMARY KEY (`Spielnummer`),
-  ADD KEY `Team` (`Team`),
+  ADD KEY `TeamA` (`TeamA`),
+  ADD KEY `TeamB` (`TeamB`),
   ADD KEY `SpielTyp` (`SpielTyp`),
   ADD KEY `Spieldatum` (`Spieldatum`);
 

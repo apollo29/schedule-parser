@@ -9,7 +9,8 @@ use Selective\ArrayReader\ArrayReader;
  */
 class ScheduleData
 {
-    public ?string $Team = null;
+    public ?string $TeamA = null;
+    public ?string $TeamB = null;
     public ?string $SpielTyp = null;
     public ?string $Spielstatus = null;
     public ?string $Bezeichnung = null;
@@ -37,13 +38,14 @@ class ScheduleData
     {
         $reader = new ArrayReader($data);
 
-        $this->Team = $reader->findString('Team');
+        $this->TeamA = $reader->findString('TeamA');
+        $this->TeamB = $reader->findString('TeamB');
         $this->SpielTyp = $reader->findString('SpielTyp');
         $this->Spielstatus = $reader->findString('Spielstatus');
         $this->Bezeichnung = $reader->findString('Bezeichnung');
         $this->Spielnummer = $reader->findInt('Spielnummer');
         $this->TagKurz = $reader->findString('TagKurz');
-        $this->Spieldatum = $reader->findString('TagKurz');
+        $this->Spieldatum = $reader->findString('Spieldatum');
         $this->Spielzeit = $reader->findString('Spielzeit');
         $this->TeamnameA = $reader->findString('Teamname A');
         $this->TeamLigaA = $reader->findString('TeamLiga A');
